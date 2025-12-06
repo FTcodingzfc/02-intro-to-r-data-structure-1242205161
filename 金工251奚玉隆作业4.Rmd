@@ -1,0 +1,266 @@
+---
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+1.是 R 语言中高性能处理结构化表格数据的包，data.table 继承自
+data.frame，二者都是行 × 列的结构化表格，存储相同类型的原子向量，
+分别是as.data.table()与as.data.frame()
+
+```         
+library(data.table)\
+dt_mtcars \<- as.data.table(mtcars)\
+is.data.table(dt_mtcars)\
+is.data.frame(mtcars)\
+```
+
+\
+2.fread()，可读取.txt .zip URL等，fwrite()\
+
+```         
+library(data.table)\
+dt_mtcars \<- as.data.table(mtcars)\
+fwrite( x = dt_mtcars, file = "mtcars_dt.csv.zip",
+```
+
+3.分别是行筛选、列操作、分组计算\
+`i`：筛选、排序、匹配 j：选列、计算、修改 by：单列 / 多列分组\
+顺序：i\>by\>j
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+dt_result <- dt_mtcars[
+  i = mpg > 15,          
+  j = .(
+    hp_mean = mean(hp), 
+    mpg_max = max(mpg), 
+    model_count = .N     
+  ),
+  by = cyl              
+]
+print(dt_result)
+```
+
+4.直接列名
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+dt_mtcars[, mpg_hp_sum := mpg + hp]
+```
+
+5.使用i进行筛选，逻辑向量，直接列名，\$引用、字符向量等、可以
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+df_mtcars <- as.data.frame(mtcars)
+df_mtcars$model <- rownames(mtcars)
+
+# data.frame行筛选
+cat("=== data.frame行筛选 ===\n")
+print(df_mtcars[df_mtcars$mpg > 25 & df_mtcars$cyl == 4, ])
+print(df_mtcars[10:15, ])
+
+# data.frame列筛选
+cat("=== data.frame列筛选 ===\n")
+print(df_mtcars[, c("model", "mpg", "cyl")])
+print(df_mtcars$hp)
+```
+
+6.DT[,.(列名)]，DT\$列名
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+
+col_dt1 <- dt_mtcars[, .(mpg)]
+
+col_vec3 <- dt_mtcars$mpg
+```
+
+7.`DT[order(列1, -列2, 列3)]` → 先按列 1 升序，再按列 2 降序，最后按列 3
+升序\
+升序：直接写列名 降序：列名前面加上“-“号\
+i可以直接进行排序操作 可以同时进⾏筛选和排序操作
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+
+dt_sorted <- dt_mtcars[order(cyl, -mpg, hp)] 
+
+dt_comb <- dt_mtcars[
+  i = mpg > 15, 
+  j = .SD[order(-hp)][1:2], 
+  by = cyl,     
+  .SDcols = c("model", "mpg", "hp") 
+]
+print(dt_comb)
+```
+
+8.新增：DT[, 新列名 := 计算逻辑] 修改：DT[, 已有列名 := 新的计算逻辑]
+添加多列：`DT[,`:=`(列1=逻辑1, 列2=逻辑2)]`
+
+```         
+library(data.table) 
+dt_mtcars <- as.data.table(mtcars) 
+dt_mtcars[, model := rownames(mtcars)] 
+dt_mtcars[, `:=`(
+  hp_per_cyl = hp / as.numeric(gsub("缸", "", cyl)), 
+  wt_kg = wt * 42,
+  disp_l = disp * 11
+)]
+```
+
+9.分组操作是指将数据表按照一个或者多个变量的取值划分为若干个
+“组”，然后对每个组内的数据独立执行计算（如求和、均值、计数等），最终按组返回结果
+by和keyby主要区别在于结果是否排序\
+
+DT[, .(求和列1 = sum(列1), 求和列2 = sum(列2)), by = .(分组列1,
+分组列2)]
+
+```         
+library(data.table) 
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]  
+dt_mtcars[, `:=`(   mpg_km = mpg * 1.609,          
+wt_kg = wt * 42  
+disp_l = disp * 11
+)]
+dt_group_sum_by <- dt_mtcars[, .(
+  hp_sum = sum(hp),
+  disp_l_sum = sum(disp_l),
+  wt_kg_sum = sum(wt_kg)
+), by = .(cyl, gear)] 
+
+print(dt_group_sum_by)
+```
+
+10.先全局筛选再分组或是先分组再组内筛选
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]  
+
+dt_mtcars[, `:=`(
+  mpg_km = mpg * 12,        
+  wt_kg = wt * 42       
+  disp_l = disp * 11    
+)]
+dt_filter_global_group <- dt_mtcars[
+  i = mpg > 15 & wt_kg < 2000,  
+  j = .(
+    hp_sum = sum(hp),            
+    disp_l_sum = sum(disp_l),
+    group_n = .N                 
+  ),
+  by = .(cyl, gear)              
+]
+
+print(dt_filter_global_group)
+```
+
+11.`.SD` 代表当前分组下的所有行、所有列组成的子数据集；若未分组，`.SD`
+代表整个 `data.table。` ，data.table
+
+对每个分组，`.SD` 会被赋值为「该分组对应的所有行 +
+指定列（默认所有列）」的 `data.table`；所有分组的 `.SD`
+组合起来，就是原表按 `by` 拆分后的若干个子 `data.table` 集合。
+
+```         
+library(data.table) 
+dt_mtcars <- as.data.table(mtcars) 
+dt_mtcars[, model := rownames(mtcars)]
+dt_mtcars[, {
+  cat("分组：cyl =", unique(cyl), "\n")
+  cat("该分组 .SD 行数：", .N, "，列数：", ncol(.SD), "\n")
+  print(.SD[1:2, .(model, mpg, hp)])
+}, by = cyl]
+```
+
+12.未分组时`.N` 表示整个 `data.table` 的总行数；分组时`.N`
+表示当前分组内的行数\
+未分组时返回标量整数
+分组时返回按分组列聚合的data.table，新增列存储每组的行数
+
+按 `by` 分组后，`.N` 会遍历每个分组并返回该组的行数，最终生成的结构是：\
+列：包含所有分组列 + 存储 `.N` 的列；\
+行：每个分组对应一行
+
+```         
+library(data.table) 
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+total_rows <- dt_mtcars[, .N]
+cat("未分组时 .N 的值（总行数）：", total_rows, "\n") 
+cat("未分组时 .N 的数据类型：", class(total_rows), "\n") 
+total_rows_dt <- dt_mtcars[, .(total_rows = .N)]
+print(total_rows_dt)
+```
+
+13.Chaining 是 `data.table` 特有链式调用语法，本质是将多个 `data.table`
+操作（筛选、分组、计算、排序等）通过 `[]` 连续串联\
+一般运用在需要简化代码的地方，增强其易读性
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+result <- dt_mtcars[vs == 1 & am == 1][, .(
+  mpg_aver = mean(mpg),  # 计算mpg均值，命名为mpg_aver
+  cyl_aver = mean(cyl)   # 计算cyl均值，命名为cyl_aver
+)]
+print(result)
+```
+
+14. X[Y, on = .(键1, 键2, ...)]\
+    方法一：使用i 方法二：使用merge()函数
+
+    方法一更简洁、更快、可以在join的同时增加列、计算\
+    方法二可通过all.x/all.y控制主副表、列名冲突时自动处理
+
+15. rbindlist()或rbind()函数
+
+```         
+library(data.table)
+dt_mtcars <- as.data.table(mtcars)
+dt_mtcars[, model := rownames(mtcars)]
+num_cols <- setdiff(names(dt_mtcars), "model")
+dt_mtcars_plus1 <- copy(dt_mtcars)
+dt_mtcars_plus1[, (num_cols) := lapply(.SD, function(x) x + 1), .SDcols = num_cols]
+dt_mtcars_plus1[, model := paste0(model, "_plus1")]
+dt_combined <- rbindlist(
+  l = list(dt_mtcars, dt_mtcars_plus1),  
+  use.names = TRUE,                      
+  fill = TRUE                            
+)
+```
+
+16.指的是数据的长宽格式的转换
+
+```         
+library(data.table)  
+dt_mtcars <- as.data.table(mtcars) 
+dt_mtcars[, model := rownames(mtcars)]
+dt_melted <- melt(
+  data = dt_mtcars,
+  id.vars = "model",          
+  measure.vars = c("mpg", "cyl", "hp"),  
+  variable.name = "metric",   
+  value.name = "value"        
+)
+
+dt_cast <- dcast(
+  data = dt_melted,
+  formula = model ~ metric,  
+  value.var = "value"        
+)
+```
